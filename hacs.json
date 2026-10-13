@@ -1,0 +1,6 @@
+{
+  "name": "Clock Cards",
+  "filename": "clock-cards.js",
+  "render_readme": true,
+  "homeassistant": "2024.1.0"
+}
