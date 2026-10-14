@@ -87,13 +87,27 @@ pollen:
 
 ## Full screen
 
-Set `fullscreen_on_tap: true` and a tap on the card takes it to the browser's full screen; another
-tap or Esc leaves it. It needs a tap because browsers do not allow full screen otherwise, and
-iPhones do not offer it for page elements at all.
+Two different things go by that name.
 
-To lose Home Assistant's own sidebar and header as well, use the
-[Kiosk Mode](https://github.com/NemesisRE/kiosk-mode) card from HACS, or Fully Kiosk / Wall Panel
-for HA, which show the dashboard on its own.
+**The card full screen in the browser**: set `fullscreen_on_tap: true` and a tap on the card takes
+it to the browser's full screen; another tap or Esc leaves it. It needs a tap because browsers do
+not allow full screen otherwise, and iPhones do not offer it for page elements at all.
+
+**Without Home Assistant's sidebar and header**: the card cannot remove them, they belong to the
+frame around the dashboard. Install [Kiosk Mode](https://github.com/NemesisRE/kiosk-mode) from
+HACS (Frontend), then open the view with `?kiosk` added to its address:
+
+```
+https://homeassistant.local:8123/dashboard-xxx/zegar?kiosk
+```
+
+Use the address of your own dashboard and view. Only the clock is left on the screen. To hide just
+one of the two, use `?hide_sidebar` or `?hide_header`. Add the address as the start page of a
+wall tablet, or as a bookmark, and it opens that way every time. Both cards in a `panel` view fill
+the whole space this leaves.
+
+Wall Panel for HA and Fully Kiosk show the dashboard without the frame already, so the address
+needs nothing added there.
 
 ## Install
 
