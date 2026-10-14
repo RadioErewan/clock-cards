@@ -109,7 +109,7 @@ const hms = (ms) => {
 /* Studio clock card                                                   */
 /* ------------------------------------------------------------------ */
 
-const STUDIO_DEFAULTS = { entities: [], leader: 5, layout: "auto" };
+const STUDIO_DEFAULTS = { entities: [], leader: 5, layout: "auto", height: "" };
 const SVG = "http://www.w3.org/2000/svg";
 const REFRESH_MS = 5 * 60 * 1000;
 
@@ -329,6 +329,8 @@ class StudioClockCard extends HTMLElement {
     const w = this.clientWidth, h = this.clientHeight || this._wrap.clientHeight;
     const wide = mode === "wide" || (mode === "auto" && w > 0 && h > 0 && w / h > 1.4);
     this._wide = wide;
+    // Optional fixed height (any CSS length, e.g. "90vh") for dashboards that do not stretch the card.
+    this._wrap.style.height = this._config.height ? String(this._config.height) : "";
     this._wrap.classList.toggle("wide", wide);
     this._wrap.classList.toggle("compact", !wide);
     // Compact: the details sit inside the ring under the countdown. Wide: beside it.
@@ -506,6 +508,7 @@ class StudioClockCardEditor extends HTMLElement {
       { name: "entities", label: "Calendars", selector: { entity: { domain: "calendar", multiple: true } } },
       { name: "leader", label: "Film leader before a start (seconds, 0 = off)",
         selector: { number: { min: 0, max: 60, mode: "box" } } },
+      { name: "height", label: "Height (CSS length, e.g. 90vh; empty = fill)", selector: { text: {} } },
       { name: "layout", label: "Layout", selector: { select: { mode: "dropdown", options: [
         { value: "auto", label: "Automatic" }, { value: "compact", label: "Ring with text inside" },
         { value: "wide", label: "Ring with text beside" },
