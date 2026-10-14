@@ -1,10 +1,18 @@
 # Clock Cards
 
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![Release](https://img.shields.io/github/v/release/RadioErewan/clock-cards)](https://github.com/RadioErewan/clock-cards/releases)
+[![License](https://img.shields.io/github/license/RadioErewan/clock-cards)](LICENSE)
+
 Two clocks for Home Assistant dashboards: a broadcast **studio clock** and a **flip clock** with
 the weather.
 
-Made for the idle page of [Wall Panel for HA](https://github.com/RadioErewan), and good on any
-dashboard: browser, the HA app, Fully Kiosk.
+<p>
+  <img src="docs/studio-clock.png" alt="Studio Clock" width="360">
+  <img src="docs/flip-clock.png" alt="Flip Clock" width="360">
+</p>
+
+Made for the idle page of a wall panel, and good on any dashboard: browser, the HA app, Fully Kiosk.
 
 ## Studio Clock (`custom:studio-clock-card`)
 
@@ -75,10 +83,18 @@ pollen:
 
 ## Install
 
+### HACS
+
+1. HACS → ⋮ → **Custom repositories**.
+2. Add `https://github.com/RadioErewan/clock-cards`, category **Dashboard**.
+3. Install **Clock Cards**, then reload the browser. Both cards appear in the card picker.
+
+### By hand
+
 Copy `dist/clock-cards.js` to `config/www/`, then add a dashboard resource
 `/local/clock-cards.js?v=1` of type *JavaScript module*. Change the number in `?v=` after each
 update, so browsers load the new file.
 
-## Related
+## Licence
 
-[Studio Clock](https://3210.lu) for Android, iOS and the web — the same clock as an app.
+MIT
