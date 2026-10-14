@@ -61,3 +61,7 @@ custom repository. Conversation with Radek in Polish; card UI and README in Engl
   Radek's HA. Weather icons are inline SVG (no SF Symbols); sizes follow the card (small, medium,
   large modes, ported from `FlipClockWidgetView.swift`). Next: try in HA, GitHub repo, release,
   screenshots.
+- 14 Oct 2026: public on GitHub (RadioErewan/clock-cards), release v0.3.0 with clock-cards.js
+  attached, screenshots in docs/. Install as a HACS custom repository (Dashboard). Next:
+  try both cards on the panel's idle page; link back to Wall Panel for HA / Studio Clock in the
+  README once the URLs are settled.
