@@ -53,3 +53,7 @@ custom repository. Conversation with Radek in Polish; card UI and README in Engl
 
 - 13 Oct 2026: folder created with the skeleton (hacs.json, LICENSE, workflow). No code, no GitHub
   repo yet. Order: Idle page in the app → studio clock card → flip clock card.
+- 14 Oct 2026: studio clock card done (`studio-clock-card` in `dist/clock-cards.js`, 0.2.0):
+  calendar events, film leader, optional `timer.*`, burn-in shift, visual editor; tried in Radek's
+  HA. Install by hand for now: `config/www/` + resource `?v=N`. Not done: beeps, GitHub repo and
+  release, screenshot. Next: flip clock card.

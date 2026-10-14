@@ -8,7 +8,7 @@
  * MIT licensed.
  */
 
-const CARD_VERSION = "0.1.0";
+const CARD_VERSION = "0.2.0";
 
 /* ------------------------------------------------------------------ */
 /* Studio clock: rules, ported from Studio.kt / StudioClock.swift      */
@@ -55,6 +55,7 @@ function studioProgress(state, now) {
     return p.from == null ? Math.min(1, Math.max(0, (p.to - now) / 3_600_000)) : frac(p.from, p.to);
   }
   if (p.kind === "onair") return frac(p.from, p.to);
+  if (p.kind === "overrun") return 1;
   return null;
 }
 
@@ -69,8 +70,10 @@ function startRemaining(state, now) {
 
 /** 0..1 through the flash that marks going on air, or null. */
 function studioFlash(phase, now) {
-  if (phase.kind !== "onair") return null;
-  const since = now - phase.from;
+  let since;
+  if (phase.kind === "onair") since = now - phase.from;
+  else if (phase.kind === "overrun") since = now - phase.since;
+  else return null;
   return since >= 0 && since < FLASH ? since / FLASH : null;
 }
 
@@ -99,6 +102,14 @@ function cleanNotes(raw) {
   return kept.join("\n").trim() || null;
 }
 
+/** "0:05:00" / "00:03:12.5" as milliseconds, or null. */
+function parseDuration(text) {
+  const m = /^(?:(\d+):)?(\d+):(\d+)(?:\.\d+)?$/.exec(String(text || "").trim());
+  return m ? (Number(m[1] || 0) * 3600 + Number(m[2]) * 60 + Number(m[3])) * 1000 : null;
+}
+
+const OVERRUN_MS = 60 * 1000;
+
 const pad2 = (n) => String(n).padStart(2, "0");
 const hms = (ms) => {
   const total = Math.floor((Math.max(0, ms) + 999) / 1000);
@@ -109,7 +120,7 @@ const hms = (ms) => {
 /* Studio clock card                                                   */
 /* ------------------------------------------------------------------ */
 
-const STUDIO_DEFAULTS = { entities: [], leader: 5, layout: "auto", height: "" };
+const STUDIO_DEFAULTS = { entities: [], timer: "", leader: 5, layout: "auto", height: "", burn_in_shift: true };
 const SVG = "http://www.w3.org/2000/svg";
 const REFRESH_MS = 5 * 60 * 1000;
 
@@ -258,6 +269,40 @@ class StudioClockCard extends HTMLElement {
     }
   }
 
+  /**
+   * A timer.* entity, when one is chosen and running, takes over from the calendar, as the manual
+   * timer does on the Android clock. When it runs out the clock counts up for a minute.
+   */
+  _timerState(now) {
+    const id = this._config.timer;
+    const ent = id && this._hass && this._hass.states[id];
+    const idle = { phase: { kind: "idle" }, slot: null, alsoOnAir: [], next: null, upcoming: [] };
+    if (!ent) return null;
+    const total = parseDuration(ent.attributes.duration);
+    if (ent.state === "active" && ent.attributes.finishes_at) {
+      const to = Date.parse(ent.attributes.finishes_at);
+      if (Number.isFinite(to)) {
+        this._timerEnd = to;
+        return { ...idle, timer: "running", phase: { kind: "countdown", from: total ? to - total : null, to } };
+      }
+    }
+    if (ent.state === "paused") {
+      const left = parseDuration(ent.attributes.remaining);
+      if (left != null) {
+        return { ...idle, timer: "paused",
+          phase: { kind: "countdown", from: total ? now + left - total : null, to: now + left } };
+      }
+    }
+    // Finished (or cancelled): count up for a minute after a natural end.
+    if (this._timerEnd && now >= this._timerEnd && now - this._timerEnd < OVERRUN_MS && ent.state === "idle") {
+      return { ...idle, timer: "over", phase: { kind: "overrun", since: this._timerEnd } };
+    }
+    // Cancelled before its end: nothing to count up from.
+    if (ent.state === "idle" && this._timerEnd && now < this._timerEnd - 2000) this._timerEnd = null;
+    if (ent.state === "idle" && now - (this._timerEnd || 0) >= OVERRUN_MS) this._timerEnd = null;
+    return null;
+  }
+
   /* ---- DOM ---- */
 
   _build() {
@@ -355,13 +400,13 @@ class StudioClockCard extends HTMLElement {
     if (!this._built || !this._config) return;
     this._maybeFetch();
     const now = Date.now();
-    const state = studioState(now, this._slots);
+    const state = this._timerState(now) || studioState(now, this._slots);
     const phase = state.phase;
     const accent = phase.kind === "onair" ? "#FFB51A" : phase.kind === "overrun" ? "#F03329" : "#6BF54A";
     const second = new Date(now).getSeconds();
     const lead = startRemaining(state, now);
     const leaderMs = Math.max(0, Number(this._config.leader) || 0) * 1000;
-    const leader = leaderMs > 0 && lead != null && lead <= leaderMs ? lead : null;
+    const leader = leaderMs > 0 && lead != null && lead <= leaderMs && state.timer !== "paused" ? lead : null;
 
     // Ring dots
     for (let i = 0; i < 60; i++) {
@@ -398,7 +443,8 @@ class StudioClockCard extends HTMLElement {
     // Time, badge, countdown
     const d = new Date(now);
     this._time.textContent = `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
-    const label = phase.kind === "onair" ? "ON AIR" : phase.kind === "countdown" ? "NEXT" : null;
+    const label = phase.kind === "onair" ? "ON AIR" : phase.kind === "overrun" ? "OVER"
+      : phase.kind === "countdown" ? (state.timer === "paused" ? "PAUSED" : state.timer ? "TIMER" : "NEXT") : null;
     this._badge.textContent = label || "";
     this._badge.className = "badge" + (label == null ? " none" : phase.kind === "countdown" ? "" : " filled");
     this._badge.style.color = phase.kind === "countdown" ? accent : "#000";
@@ -410,6 +456,18 @@ class StudioClockCard extends HTMLElement {
     this._count.classList.toggle("start", text.length > 8);
 
     this._renderDetails(state, now);
+    this._shift(now);
+  }
+
+  /** A few pixels' drift every three minutes, so static digits do not burn into an AMOLED panel. */
+  _shift(now) {
+    const steps = [[0, 0], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1]];
+    const step = this._config.burn_in_shift === false ? 0 : Math.floor(now / 180000) % steps.length;
+    if (step === this._step) return;
+    this._step = step;
+    const px = Math.max(1, Math.round(Math.min(this.clientWidth, this.clientHeight || 240) * 0.008));
+    const [x, y] = steps[step];
+    this._wrap.style.transform = x || y ? `translate(${x * px}px, ${y * px}px)` : "";
   }
 
   _countdown(phase, now) {
@@ -417,6 +475,7 @@ class StudioClockCard extends HTMLElement {
       return phase.to - now > DAY ? this._startLabel(phase.to, now) : hms(phase.to - now);
     }
     if (phase.kind === "onair") return hms(phase.to - now);
+    if (phase.kind === "overrun") return "+" + hms(now - phase.since);
     return "--:--:--";
   }
 
@@ -438,7 +497,12 @@ class StudioClockCard extends HTMLElement {
     const slot = state.slot;
     const rows = [];
     const add = (cls, text) => rows.push([cls, text]);
-    if (this._notice && !slot) {
+    if (state.timer) {
+      const p = state.phase;
+      add("title", state.timer === "over" ? "Time is up" : state.timer === "paused" ? "Timer paused" : "Timer running");
+      if (state.timer === "over") add("small", `Ended at ${this._clock(p.since)}`);
+      else if (state.timer === "running") add("small", `Ends at ${this._clock(p.to)}`);
+    } else if (this._notice && !slot) {
       add("small", this._notice);
     } else if (slot) {
       add("title", slot.title);
@@ -506,8 +570,12 @@ class StudioClockCardEditor extends HTMLElement {
     this._form.hass = this._hass;
     this._form.schema = [
       { name: "entities", label: "Calendars", selector: { entity: { domain: "calendar", multiple: true } } },
+      { name: "timer", label: "Timer (optional; takes over while running)",
+        selector: { entity: { domain: "timer" } } },
       { name: "leader", label: "Film leader before a start (seconds, 0 = off)",
         selector: { number: { min: 0, max: 60, mode: "box" } } },
+      { name: "burn_in_shift", label: "Shift the picture a few pixels now and then (AMOLED burn-in)",
+        selector: { boolean: {} } },
       { name: "height", label: "Height (CSS length, e.g. 90vh; empty = fill)", selector: { text: {} } },
       { name: "layout", label: "Layout", selector: { select: { mode: "dropdown", options: [
         { value: "auto", label: "Automatic" }, { value: "compact", label: "Ring with text inside" },
