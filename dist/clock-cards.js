@@ -8,7 +8,7 @@
  * MIT licensed.
  */
 
-const CARD_VERSION = "0.3.0";
+const CARD_VERSION = "0.4.0";
 
 /* ------------------------------------------------------------------ */
 /* Studio clock: rules, ported from Studio.kt / StudioClock.swift      */
@@ -110,6 +110,24 @@ function parseDuration(text) {
 
 const OVERRUN_MS = 60 * 1000;
 
+/** Tap anywhere on the card to take it full screen, tap again (or Esc) to leave. */
+function enableFullscreenOnTap(el, isOn) {
+  el.addEventListener("click", () => {
+    if (!isOn()) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    } else if (el.requestFullscreen) {
+      el.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
+    }
+  });
+}
+
+const FULLSCREEN_CSS = `
+:host(:fullscreen) { background: #000; width: 100vw; height: 100vh; }
+:host(:fullscreen) ha-card { height: 100vh; border-radius: 0; }
+:host(:fullscreen) .wrap { height: 100vh !important; }
+`;
+
 const pad2 = (n) => String(n).padStart(2, "0");
 const hms = (ms) => {
   const total = Math.floor((Math.max(0, ms) + 999) / 1000);
@@ -120,7 +138,7 @@ const hms = (ms) => {
 /* Studio clock card                                                   */
 /* ------------------------------------------------------------------ */
 
-const STUDIO_DEFAULTS = { entities: [], timer: "", leader: 5, layout: "auto", height: "", burn_in_shift: true };
+const STUDIO_DEFAULTS = { entities: [], timer: "", leader: 5, layout: "auto", height: "", burn_in_shift: true, fullscreen_on_tap: false };
 const SVG = "http://www.w3.org/2000/svg";
 const REFRESH_MS = 5 * 60 * 1000;
 
@@ -307,7 +325,7 @@ class StudioClockCard extends HTMLElement {
 
   _build() {
     const root = this.shadowRoot;
-    root.innerHTML = `<style>${STUDIO_CSS}</style>
+    root.innerHTML = `<style>${STUDIO_CSS}${FULLSCREEN_CSS}</style>
       <ha-card><div class="wrap compact">
         <div class="face">
           <svg viewBox="0 0 100 100" aria-hidden="true">
@@ -361,6 +379,7 @@ class StudioClockCard extends HTMLElement {
     this._leadCirc = 2 * Math.PI * 40;
     this._detailKey = null;
 
+    enableFullscreenOnTap(this, () => this._config && this._config.fullscreen_on_tap);
     this._ro = new ResizeObserver(() => this._applyLayout());
     this._ro.observe(this);
     this._built = true;
@@ -576,6 +595,7 @@ class StudioClockCardEditor extends HTMLElement {
         selector: { number: { min: 0, max: 60, mode: "box" } } },
       { name: "burn_in_shift", label: "Shift the picture a few pixels now and then (AMOLED burn-in)",
         selector: { boolean: {} } },
+      { name: "fullscreen_on_tap", label: "Tap the card to go full screen", selector: { boolean: {} } },
       { name: "height", label: "Height (CSS length, e.g. 90vh; empty = fill)", selector: { text: {} } },
       { name: "layout", label: "Layout", selector: { select: { mode: "dropdown", options: [
         { value: "auto", label: "Automatic" }, { value: "compact", label: "Ring with text inside" },
@@ -695,7 +715,7 @@ function burnInStep(now) {
 
 const FLIP_DEFAULTS = {
   entity: "", name: "", theme: "classic", typeface: "condensed", time_format: "auto",
-  forecast_days: 5, pollen: [], height: "", burn_in_shift: true,
+  forecast_days: 5, pollen: [], height: "", burn_in_shift: true, fullscreen_on_tap: false,
 };
 
 const FLIP_CSS = `
@@ -813,7 +833,7 @@ class FlipClockCard extends HTMLElement {
   /* ---- DOM ---- */
 
   _build() {
-    this.shadowRoot.innerHTML = `<style>${FLIP_CSS}</style>
+    this.shadowRoot.innerHTML = `<style>${FLIP_CSS}${FULLSCREEN_CSS}</style>
       <ha-card><div class="wrap"><div class="shift">
         <div class="plate"></div>
         <div class="col">
@@ -836,6 +856,7 @@ class FlipClockCard extends HTMLElement {
     this._date = r.querySelector(".date");
     this._cap = r.querySelector(".cap");
     this._icon = r.querySelector(".icon");
+    enableFullscreenOnTap(this, () => this._config && this._config.fullscreen_on_tap);
     this._ro = new ResizeObserver(() => { this._key = null; this._layout(); });
     this._ro.observe(this);
     this._built = true;
@@ -1106,6 +1127,7 @@ class FlipClockCardEditor extends HTMLElement {
       { name: "forecast_days", label: "Forecast days (0 = none)", selector: { number: { min: 0, max: 7, mode: "box" } } },
       { name: "pollen", label: "Pollen sensors", selector: { entity: { domain: "sensor", multiple: true } } },
       { name: "burn_in_shift", label: "Shift the picture a few pixels now and then (AMOLED burn-in)", selector: { boolean: {} } },
+      { name: "fullscreen_on_tap", label: "Tap the card to go full screen", selector: { boolean: {} } },
       { name: "height", label: "Height (CSS length, e.g. 90vh; empty = fill)", selector: { text: {} } },
     ];
     this._form.data = this._config;

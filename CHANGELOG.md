@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0
+
+- Both cards: `fullscreen_on_tap` takes the card to the browser's full screen.
+
 ## 0.3.0
 
 - Flip clock card: flip cards, date, weather from a `weather.*` entity with daily forecast,

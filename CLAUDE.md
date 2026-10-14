@@ -65,3 +65,4 @@ custom repository. Conversation with Radek in Polish; card UI and README in Engl
   attached, screenshots in docs/. Install as a HACS custom repository (Dashboard). Next:
   try both cards on the panel's idle page; link back to Wall Panel for HA / Studio Clock in the
   README once the URLs are settled.
+- 14 Oct 2026: v0.4.0 adds `fullscreen_on_tap` (Fullscreen API on the card element).

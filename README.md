@@ -40,6 +40,7 @@ becomes a film leader: one large digit and a sweep round the ring each second.
 | `layout` | `auto` | `auto`, `compact` (text inside the ring) or `wide` (text beside it, with a rundown) |
 | `height` | | Any CSS length, such as `90vh`, for dashboards that do not stretch the card |
 | `burn_in_shift` | `true` | Shift the picture now and then |
+| `fullscreen_on_tap` | `false` | Tap the card to take it full screen, tap again to leave |
 
 ```yaml
 type: custom:studio-clock-card
@@ -73,6 +74,7 @@ and a forecast. No animation, so nothing to wear out on a wall panel.
 | `pollen` | | List of sensor entities |
 | `height` | | Any CSS length, such as `90vh` |
 | `burn_in_shift` | `true` | Shift the picture now and then |
+| `fullscreen_on_tap` | `false` | Tap the card to take it full screen, tap again to leave |
 
 ```yaml
 type: custom:flip-clock-card
@@ -82,6 +84,16 @@ theme: classic
 pollen:
   - sensor.pollen_grass
 ```
+
+## Full screen
+
+Set `fullscreen_on_tap: true` and a tap on the card takes it to the browser's full screen; another
+tap or Esc leaves it. It needs a tap because browsers do not allow full screen otherwise, and
+iPhones do not offer it for page elements at all.
+
+To lose Home Assistant's own sidebar and header as well, use the
+[Kiosk Mode](https://github.com/NemesisRE/kiosk-mode) card from HACS, or Fully Kiosk / Wall Panel
+for HA, which show the dashboard on its own.
 
 ## Install
 
