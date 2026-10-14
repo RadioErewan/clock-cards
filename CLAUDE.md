@@ -57,3 +57,7 @@ custom repository. Conversation with Radek in Polish; card UI and README in Engl
   calendar events, film leader, optional `timer.*`, burn-in shift, visual editor; tried in Radek's
   HA. Install by hand for now: `config/www/` + resource `?v=N`. Not done: beeps, GitHub repo and
   release, screenshot. Next: flip clock card.
+- 14 Oct 2026: flip clock card done (0.3.0), tried in a browser with a mocked `hass`, not yet in
+  Radek's HA. Weather icons are inline SVG (no SF Symbols); sizes follow the card (small, medium,
+  large modes, ported from `FlipClockWidgetView.swift`). Next: try in HA, GitHub repo, release,
+  screenshots.

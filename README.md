@@ -1,7 +1,7 @@
 # Clock Cards
 
 Two clocks for Home Assistant dashboards: a broadcast **studio clock** and a **flip clock** with
-the weather. The studio clock is ready; the flip clock is still to come.
+the weather.
 
 Made for the idle page of [Wall Panel for HA](https://github.com/RadioErewan), and good on any
 dashboard: browser, the HA app, Fully Kiosk.
@@ -37,6 +37,40 @@ entities:
   - calendar.work
 timer: timer.studio
 layout: auto
+```
+
+## Flip Clock (`custom:flip-clock-card`)
+
+Two flip cards with the hour and the minute, the weekday and date lettered on the base below,
+and the weather from a Home Assistant `weather.*` entity: icon, temperature, high and low, wind
+and a forecast. No animation, so nothing to wear out on a wall panel.
+
+- Weather comes from the entity you pick, with the daily forecast through Home Assistant's own
+  subscription. No API key, no location, no extra service.
+- The layout follows the card's size: a small square shows the clock and the temperature, a wide
+  strip adds the place and the description, a tall or large one adds wind, pollen and the week.
+- Pollen: any sensors you choose; those at zero are left out.
+- Four themes (classic, charcoal, amber, slate) and four digit faces.
+
+| Option | Default | |
+|---|---|---|
+| `entity` | | A `weather.*` entity |
+| `name` | entity's name | Place name shown |
+| `theme` | `classic` | `classic`, `charcoal`, `amber`, `slate` |
+| `typeface` | `condensed` | `condensed`, `rounded`, `serif`, `monospaced` |
+| `time_format` | `auto` | `auto` (as in HA), `24`, `12` |
+| `forecast_days` | `5` | 0 to 7; 0 for none |
+| `pollen` | | List of sensor entities |
+| `height` | | Any CSS length, such as `90vh` |
+| `burn_in_shift` | `true` | Shift the picture now and then |
+
+```yaml
+type: custom:flip-clock-card
+entity: weather.forecast_home
+name: Ballincollig
+theme: classic
+pollen:
+  - sensor.pollen_grass
 ```
 
 ## Install

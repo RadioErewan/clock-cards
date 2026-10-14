@@ -8,7 +8,7 @@
  * MIT licensed.
  */
 
-const CARD_VERSION = "0.2.0";
+const CARD_VERSION = "0.3.0";
 
 /* ------------------------------------------------------------------ */
 /* Studio clock: rules, ported from Studio.kt / StudioClock.swift      */
@@ -587,6 +587,532 @@ class StudioClockCardEditor extends HTMLElement {
 }
 
 /* ------------------------------------------------------------------ */
+/* Flip clock card, ported from FlipClockWidgetView.swift / ClockTheme  */
+/* ------------------------------------------------------------------ */
+
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+/** Reinterprets a tint at a given lightness, so one gradient shape serves every theme. */
+const shade = (tint, level) => {
+  const l = Math.min(Math.max(level, 0), 1);
+  return `rgb(${Math.round(tint[0] * l * 255)},${Math.round(tint[1] * l * 255)},${Math.round(tint[2] * l * 255)})`;
+};
+const grey = (w) => shade([1, 1, 1], w);
+
+/** The two leaf gradients from a base tone, preserving the measured falloff. */
+function leaves(tint, top, seamEdge, flare, bottom) {
+  return {
+    upper: `linear-gradient(to bottom, ${shade(tint, top - 0.055)} 0%, ${shade(tint, top)} 10%, ${shade(tint, top - 0.01)} 78%, ${shade(tint, seamEdge)} 100%)`,
+    lower: `linear-gradient(to bottom, ${shade(tint, flare)} 0%, ${shade(tint, flare - 0.025)} 20%, ${shade(tint, (flare + bottom) / 2)} 55%, ${shade(tint, bottom + 0.17)} 85%, ${shade(tint, bottom)} 100%)`,
+  };
+}
+
+const FLIP_THEMES = (() => {
+  const white = [1, 1, 1], cream = [1, 0.96, 0.88];
+  const c = leaves(white, 0.955, 0.885, 0.985, 0.61);
+  const d = leaves(white, 0.26, 0.2, 0.3, 0.1);
+  const a = leaves(cream, 0.94, 0.87, 0.97, 0.58);
+  const sl = leaves(white, 0.955, 0.885, 0.985, 0.62);
+  return {
+    classic: { bg: "#000", standTop: grey(0.72), standBase: grey(0.52), bodyBottom: grey(0.05), ...c,
+      seam: grey(0.78), rim: "rgba(255,255,255,.75)", dateText: grey(0.15), digit: grey(0.08),
+      primary: "#fff", secondary: "rgba(255,255,255,.75)" },
+    charcoal: { bg: "#000", standTop: grey(0.82), standBase: grey(0.62), bodyBottom: grey(0.03), ...d,
+      seam: grey(0.34), rim: "rgba(255,255,255,.18)", dateText: grey(0.14), digit: grey(0.93),
+      primary: "#fff", secondary: "rgba(255,255,255,.7)" },
+    amber: { bg: "rgb(15,13,8)", standTop: "rgb(184,168,140)", standBase: "rgb(133,117,92)", bodyBottom: "rgb(23,18,10)", ...a,
+      seam: "rgb(158,140,112)", rim: "rgba(255,255,255,.6)", dateText: "rgb(41,26,10)", digit: "rgb(41,26,10)",
+      primary: "rgb(255,237,204)", secondary: "rgba(255,237,204,.7)" },
+    slate: { bg: "rgb(20,23,28)", standTop: "rgb(168,176,186)", standBase: "rgb(122,130,140)", bodyBottom: "rgb(13,15,20)", ...sl,
+      seam: grey(0.78), rim: "rgba(255,255,255,.75)", dateText: grey(0.12), digit: grey(0.1),
+      primary: "#fff", secondary: "rgba(255,255,255,.75)" },
+  };
+})();
+
+/** Width of two digits in ems, so the pair fits the card whichever face the browser ends up with. */
+const FLIP_FACES = {
+  condensed: { css: '"Arial Narrow","Roboto Condensed","Helvetica Neue",system-ui,sans-serif', stretch: "condensed", em: 1.0, weight: 500 },
+  rounded: { css: 'ui-rounded,"SF Pro Rounded","Nunito","Varela Round",system-ui,sans-serif', stretch: "normal", em: 1.15, weight: 500 },
+  serif: { css: 'ui-serif,Georgia,"Times New Roman",serif', stretch: "normal", em: 1.12, weight: 500 },
+  monospaced: { css: 'ui-monospace,"JetBrains Mono","SF Mono",Menlo,Consolas,monospace', stretch: "normal", em: 1.25, weight: 500 },
+};
+
+const CONDITION_TEXT = {
+  "clear-night": "Clear night", cloudy: "Cloudy", exceptional: "Exceptional", fog: "Fog", hail: "Hail",
+  lightning: "Thunderstorm", "lightning-rainy": "Thunderstorm, rain", partlycloudy: "Partly cloudy",
+  pouring: "Heavy rain", rainy: "Rain", snowy: "Snow", "snowy-rainy": "Sleet", sunny: "Sunny",
+  windy: "Windy", "windy-variant": "Windy",
+};
+
+/* Multicolour weather glyphs, drawn on a 64x64 grid. */
+const SUN = (x, y, r, k = 1) => {
+  let rays = "";
+  for (let i = 0; i < 8; i++) {
+    const a = (i * Math.PI) / 4, r1 = r * 1.45, r2 = r * 1.95;
+    rays += `<line x1="${(x + r1 * Math.cos(a)).toFixed(1)}" y1="${(y + r1 * Math.sin(a)).toFixed(1)}" x2="${(x + r2 * Math.cos(a)).toFixed(1)}" y2="${(y + r2 * Math.sin(a)).toFixed(1)}"/>`;
+  }
+  return `<g stroke="#FFC933" stroke-width="${3.4 * k}" stroke-linecap="round">${rays}</g><circle cx="${x}" cy="${y}" r="${r}" fill="#FFCC33"/>`;
+};
+const MOON = (x, y, r) =>
+  `<path d="M${x + r * 0.35} ${y - r} a${r} ${r} 0 1 0 ${r * 0.9} ${r * 1.45} a${r * 0.8} ${r * 0.8} 0 0 1 ${-r * 0.9} ${-r * 1.45}z" fill="#F2E3A0"/>`;
+const CLOUD = (dx, dy, fill = "#EEF1F5", s = 1) =>
+  `<path transform="translate(${dx} ${dy}) scale(${s})" d="M18 46a10 10 0 0 1 1-20 14 14 0 0 1 27 4 8 8 0 0 1 0 16z" fill="${fill}"/>`;
+const DROPS = (n, heavy) => {
+  const xs = n === 4 ? [20, 29, 38, 47] : [24, 34, 44];
+  return `<g stroke="#4F9DF5" stroke-width="${heavy ? 4 : 3.2}" stroke-linecap="round">${xs.map((x, i) =>
+    `<line x1="${x + 2}" y1="${50 + (i % 2) * 2}" x2="${x - 2}" y2="${58 + (i % 2) * 2}"/>`).join("")}</g>`;
+};
+const FLAKES = (xs, c = "#DCEBFA") => xs.map((x, i) => `<circle cx="${x}" cy="${53 + (i % 2) * 5}" r="2.6" fill="${c}"/>`).join("");
+const BOLT = `<polygon points="35,38 25,53 32,53 29,64 42,46 34.5,46 39,38" fill="#FFD21F"/>`;
+
+function weatherIcon(cond, night) {
+  let body;
+  switch (cond) {
+    case "sunny": body = night ? MOON(32, 32, 15) : SUN(32, 32, 12); break;
+    case "clear-night": body = MOON(32, 32, 15); break;
+    case "partlycloudy": body = (night ? MOON(24, 24, 11) : SUN(24, 24, 9, 0.8)) + CLOUD(6, 6, "#EEF1F5", 1); break;
+    case "rainy": body = CLOUD(0, -4) + DROPS(3, false); break;
+    case "pouring": body = CLOUD(0, -4, "#B9C2CC") + DROPS(4, true); break;
+    case "snowy": body = CLOUD(0, -4) + FLAKES([22, 32, 42]); break;
+    case "snowy-rainy": body = CLOUD(0, -4) + DROPS(3, false).replace("<g", '<g opacity=".9"') + FLAKES([30, 40], "#DCEBFA"); break;
+    case "hail": body = CLOUD(0, -4, "#B9C2CC") + FLAKES([20, 30, 40, 50], "#BFE3FF"); break;
+    case "fog": body = CLOUD(0, -8) + `<g stroke="#C9D1D9" stroke-width="3.4" stroke-linecap="round"><line x1="12" y1="46" x2="52" y2="46"/><line x1="18" y1="53" x2="58" y2="53"/></g>`; break;
+    case "lightning": body = CLOUD(0, -6, "#B9C2CC") + BOLT; break;
+    case "lightning-rainy": body = CLOUD(0, -6, "#B9C2CC") + BOLT.replace("35,38 25,53", "30,38 20,53").replace("32,53 29,64 42,46 34.5,46 39,38", "27,53 24,64 37,46 29.5,46 34,38") + DROPS(3, false).replace(/x1="(\d+)"/g, (m, x) => `x1="${+x + 14}"`).replace(/x2="(\d+)"/g, (m, x) => `x2="${+x + 14}"`); break;
+    case "windy": case "windy-variant": body = `<g fill="none" stroke="#C9D1D9" stroke-width="3.6" stroke-linecap="round"><path d="M8 26h30a7 7 0 1 0-7-7"/><path d="M8 36h40a7 7 0 1 1-7 7"/><path d="M8 46h20"/></g>`; break;
+    default: body = CLOUD(0, 0);
+  }
+  return `<svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true">${body}</svg>`;
+}
+
+const ALLERGEN = `<svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><circle cx="8" cy="9" r="3"/><circle cx="16" cy="7" r="2"/><circle cx="15" cy="15" r="3.5"/><circle cx="6" cy="17" r="1.8"/></svg>`;
+
+/** The offset, in whole steps, of the drifting picture for a burn-in shift: eight points, three minutes each. */
+function burnInStep(now) {
+  const steps = [[0, 0], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1]];
+  return steps[Math.floor(now / 180000) % steps.length];
+}
+
+const FLIP_DEFAULTS = {
+  entity: "", name: "", theme: "classic", typeface: "condensed", time_format: "auto",
+  forecast_days: 5, pollen: [], height: "", burn_in_shift: true,
+};
+
+const FLIP_CSS = `
+:host { display: block; height: 100%; }
+ha-card { overflow: hidden; height: 100%; background: transparent; }
+.wrap { position: relative; width: 100%; height: 100%; min-height: 200px; overflow: hidden;
+  background: var(--bg); color: var(--primary); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  container-type: size; }
+.plate { position: absolute; z-index: 0; }
+.col { position: absolute; z-index: 1; left: 0; right: 0; top: 0; bottom: 0; display: flex; flex-direction: column; align-items: stretch; }
+.cards { position: relative; z-index: 2; display: flex; justify-content: center; gap: var(--sp); flex: none; }
+.card { position: relative; flex: none; overflow: hidden; box-shadow: 0 0 0 .6px var(--rim) inset; }
+.cards { filter: drop-shadow(0 calc(var(--ch) * .035) calc(var(--ch) * .05) rgba(0,0,0,.35)); }
+.card .leaf { position: absolute; left: 0; right: 0; height: 50%; }
+.card .up { top: 0; background: var(--upper); }
+.card .low { bottom: 0; background: var(--lower); }
+.card .digits { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--digit); line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.card .mer { position: absolute; left: 6%; bottom: 10%; color: var(--digit); font-weight: 500; }
+.card .seam { position: absolute; left: 0; right: 0; top: 50%; background: var(--seam); }
+.date { position: relative; z-index: 1; align-self: center; flex: none; display: flex; justify-content: center;
+  border: solid rgba(255,255,255,.45); box-sizing: border-box; }
+.date span { display: block; text-align: center; color: var(--dateText); font-weight: 500; white-space: nowrap; overflow: hidden; }
+.icon { position: absolute; z-index: 3; left: 50%; transform: translateX(-50%); }
+.cap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.row { display: flex; align-items: flex-start; justify-content: space-between; }
+.city { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sum { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.temp { display: flex; align-items: center; }
+.hl { display: flex; flex-direction: column; }
+.wind { display: flex; align-items: center; }
+.wind svg { display: block; }
+.pollen { display: flex; gap: .5em; align-items: center; color: var(--secondary); white-space: nowrap; overflow: hidden; }
+.days { display: flex; align-items: flex-start; }
+.day { flex: 1; display: flex; flex-direction: column; align-items: center; font-weight: 600; }
+.day .ico { display: block; }
+.note { color: var(--secondary); }
+.shift { position: absolute; inset: 0; isolation: isolate; }
+`;
+
+class FlipClockCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._config = null;
+    this._hass = null;
+    this._built = false;
+    this._forecast = [];
+    this._sub = null;
+    this._subEntity = null;
+    this._timer = null;
+    this._key = null;
+    this._step = null;
+  }
+
+  static getStubConfig(hass, entities) {
+    const w = (entities || []).find((e) => e.startsWith("weather."));
+    return { type: "custom:flip-clock-card", entity: w || "" };
+  }
+
+  static getConfigElement() { return document.createElement("flip-clock-card-editor"); }
+
+  getCardSize() { return 4; }
+
+  setConfig(config) {
+    if (!config) throw new Error("Invalid configuration");
+    const pollen = [].concat(config.pollen || []);
+    this._config = { ...FLIP_DEFAULTS, ...config, pollen };
+    this._key = null;
+    if (this._built) { this._layout(); this._subscribe(); }
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (!this._built) this._build();
+    this._subscribe();
+  }
+
+  connectedCallback() {
+    if (this._built) { this._subscribe(); this._start(); }
+  }
+
+  disconnectedCallback() {
+    clearTimeout(this._timer);
+    this._timer = null;
+    if (this._ro) this._ro.disconnect();
+    this._unsubscribe();
+  }
+
+  /* ---- forecast subscription ---- */
+
+  _subscribe() {
+    const entity = this._config && this._config.entity;
+    if (!entity || !this._hass || !this._hass.connection || this._subEntity === entity) return;
+    this._unsubscribe();
+    this._subEntity = entity;
+    this._forecast = [];
+    try {
+      const p = this._hass.connection.subscribeMessage((ev) => {
+        this._forecast = (ev && ev.forecast) || [];
+        this._key = null;
+      }, { type: "weather/subscribe_forecast", forecast_type: "daily", entity_id: entity });
+      this._sub = p;
+      p.catch(() => { this._sub = null; });
+    } catch (e) { this._sub = null; }
+  }
+
+  _unsubscribe() {
+    const sub = this._sub;
+    this._sub = null;
+    this._subEntity = null;
+    if (sub) sub.then((u) => typeof u === "function" && u()).catch(() => {});
+  }
+
+  /* ---- DOM ---- */
+
+  _build() {
+    this.shadowRoot.innerHTML = `<style>${FLIP_CSS}</style>
+      <ha-card><div class="wrap"><div class="shift">
+        <div class="plate"></div>
+        <div class="col">
+          <div class="cards">
+            <div class="card h"><div class="leaf up"></div><div class="leaf low"></div><div class="digits"></div><div class="mer"></div><i class="seam"></i></div>
+            <div class="card m"><div class="leaf up"></div><div class="leaf low"></div><div class="digits"></div><i class="seam"></i></div>
+          </div>
+          <div class="date"><span class="wd"></span><span class="dt"></span></div>
+          <div class="cap"></div>
+        </div>
+        <div class="icon"></div>
+      </div></div></ha-card>`;
+    const r = this.shadowRoot;
+    this._wrap = r.querySelector(".wrap");
+    this._shiftEl = r.querySelector(".shift");
+    this._plate = r.querySelector(".plate");
+    this._col = r.querySelector(".col");
+    this._cards = r.querySelector(".cards");
+    this._cardEls = [r.querySelector(".card.h"), r.querySelector(".card.m")];
+    this._date = r.querySelector(".date");
+    this._cap = r.querySelector(".cap");
+    this._icon = r.querySelector(".icon");
+    this._ro = new ResizeObserver(() => { this._key = null; this._layout(); });
+    this._ro.observe(this);
+    this._built = true;
+    this._layout();
+    this._start();
+  }
+
+  _theme() { return FLIP_THEMES[this._config.theme] || FLIP_THEMES.classic; }
+
+  /** Sizes follow the widget's: everything is derived from the card's width and height. */
+  _layout() {
+    if (!this._built || !this._config) return;
+    const cfg = this._config;
+    this._wrap.style.height = cfg.height ? String(cfg.height) : "";
+    const w = this._wrap.clientWidth || this.clientWidth || 400;
+    const h = this._wrap.clientHeight || this.clientHeight || 300;
+    const ratio = w / h;
+    const days = Math.max(0, Math.min(7, Number(cfg.forecast_days) || 0));
+    const mode = days > 0 && h >= 280 && ratio < 3 ? "large" : ratio >= 1.5 ? "medium" : "small";
+    let ch, cw, icon, inset = w * 0.045;
+    if (mode === "large") {
+      ch = Math.min(h * 0.38, w * 0.4);
+      cw = ratio >= 1.5 ? Math.min(ch * 1.9, w * 0.4) : ch * 1.02;
+      icon = h * 0.19;
+    } else if (mode === "medium") {
+      ch = Math.min(h * 0.55, w * 0.4); cw = ch * 1.02; icon = h * 0.3;
+    } else {
+      inset = w * 0.015;
+      const avail = w - inset * 2;
+      ch = Math.min(h * 0.55, avail / (2 * 0.9 + 0.1));
+      cw = (avail - ch * 0.1) / 2;
+      icon = h * 0.21;
+    }
+    const top = h * 0.05, overhang = ch * 0.28, rowH = ch * 0.28, visible = rowH * 0.75, tuck = rowH * 0.25;
+    const slabTop = top + overhang, slabH = Math.max(1, h - slabTop);
+    const dateLine = Math.min(0.95, (top + ch + visible - slabTop) / slabH);
+    const t = this._theme();
+    const face = FLIP_FACES[cfg.typeface] || FLIP_FACES.condensed;
+    const wrap = this._wrap;
+    for (const [k, v] of Object.entries({ bg: t.bg, upper: t.upper, lower: t.lower, seam: t.seam, rim: t.rim,
+      dateText: t.dateText, digit: t.digit, primary: t.primary, secondary: t.secondary, ch: ch + "px", sp: ch * 0.1 + "px" })) {
+      wrap.style.setProperty("--" + k, v);
+    }
+    Object.assign(this._plate.style, {
+      left: ch * 0.032 + "px", right: ch * 0.032 + "px", top: slabTop + "px", bottom: ch * 0.032 + "px",
+      borderRadius: ch * 0.16 + "px",
+      background: `linear-gradient(to bottom, ${t.standTop} 0%, ${t.standBase} ${dateLine * 100}%, ${t.bodyBottom} ${Math.min(1, dateLine + 0.05) * 100}%, ${t.bodyBottom} 100%)`,
+    });
+    Object.assign(this._col.style, { paddingTop: top + "px", paddingLeft: inset + "px", paddingRight: inset + "px" });
+    const digit = Math.min(ch * 0.86, (cw * 0.92) / face.em);
+    this._cardEls.forEach((c) => {
+      Object.assign(c.style, { width: cw + "px", height: ch + "px", borderRadius: ch * 0.14 + "px" });
+      Object.assign(c.querySelector(".digits").style, { fontFamily: face.css, fontStretch: face.stretch, fontWeight: face.weight, fontSize: digit + "px" });
+      const seam = c.querySelector(".seam");
+      seam.style.height = Math.max(0.5, ch * 0.005) + "px";
+    });
+    this._cardEls[0].querySelector(".mer").style.fontSize = ch * 0.15 + "px";
+    Object.assign(this._date.style, {
+      width: cw * 2 + ch * 0.1 + "px", height: rowH + "px", marginTop: -tuck + "px",
+      borderWidth: Math.max(0.5, visible * 0.03) + "px", borderRadius: visible * 0.42 + "px",
+      paddingTop: tuck / 2 + "px", gap: ch * 0.1 + "px", alignItems: "center",
+    });
+    this._date.querySelectorAll("span").forEach((s) => {
+      Object.assign(s.style, { width: cw + "px", fontSize: visible * 0.55 + "px", letterSpacing: visible * 0.035 + "px" });
+    });
+    Object.assign(this._icon.style, {
+      width: icon * 1.3 + "px", height: icon + "px",
+      top: top + ch + rowH * 0.9 - icon * 0.3 + "px",
+    });
+    this._dim = { w, h, ch, cw, mode, days: mode === "large" ? (ratio >= 1.5 ? Math.min(7, days) : Math.min(5, days)) : 0, visible };
+    this._key = null;
+    this._shiftStep = null;
+  }
+
+  _start() {
+    clearTimeout(this._timer);
+    const tick = () => {
+      this._update();
+      this._timer = setTimeout(tick, 1000 - (Date.now() % 1000) + 5);
+    };
+    tick();
+  }
+
+  _lang() { return (this._hass && this._hass.locale && this._hass.locale.language) || undefined; }
+
+  _uses12h() {
+    const f = this._config.time_format;
+    if (f === "12") return true;
+    if (f === "24") return false;
+    const fmt = this._hass && this._hass.locale && this._hass.locale.time_format;
+    if (fmt === "12") return true;
+    if (fmt === "24") return false;
+    try { return new Intl.DateTimeFormat(this._lang(), { hour: "numeric" }).resolvedOptions().hour12 === true; }
+    catch (e) { return false; }
+  }
+
+  /** What the weather entity says now, in the shape the layout draws. */
+  _weather() {
+    const cfg = this._config;
+    if (!cfg.entity || !this._hass) return { none: true };
+    const st = this._hass.states[cfg.entity];
+    if (!st || st.state === "unavailable" || st.state === "unknown") {
+      return { error: st ? "The weather entity is unavailable." : `Entity ${cfg.entity} not found.` };
+    }
+    const a = st.attributes || {};
+    const sun = this._hass.states["sun.sun"];
+    const night = st.state === "clear-night" || (sun && sun.state === "below_horizon");
+    let summary;
+    try { summary = this._hass.formatEntityState ? this._hass.formatEntityState(st) : null; } catch (e) { summary = null; }
+    const today = new Date().toDateString();
+    const daily = (this._forecast || []).filter((f) => f.datetime && new Date(f.datetime).setHours(23, 59, 59) >= Date.now() - 1000)
+      .map((f) => ({ date: new Date(f.datetime), cond: f.condition, high: f.temperature, low: f.templow }));
+    const todayItem = daily.find((d) => d.date.toDateString() === today) || daily[0];
+    const wind = Number(a.wind_speed);
+    return {
+      city: cfg.name || a.friendly_name || "",
+      temp: Number(a.temperature),
+      high: todayItem && Number.isFinite(Number(todayItem.high)) ? Number(todayItem.high) : null,
+      low: todayItem && Number.isFinite(Number(todayItem.low)) ? Number(todayItem.low) : null,
+      summary: summary || CONDITION_TEXT[st.state] || st.state,
+      cond: st.state, night,
+      wind: Number.isFinite(wind) ? wind : null, windUnit: a.wind_speed_unit || "",
+      bearing: Number.isFinite(Number(a.wind_bearing)) ? Number(a.wind_bearing) : null,
+      daily,
+    };
+  }
+
+  _pollen() {
+    const out = [];
+    for (const id of this._config.pollen) {
+      const st = this._hass && this._hass.states[id];
+      if (!st || ["unavailable", "unknown", "none", "0", ""].includes(String(st.state).toLowerCase())) continue;
+      const label = String((st.attributes && st.attributes.friendly_name) || id)
+        .replace(/^pollen[\s_-]*/i, "").replace(/[\s_-]*pollen$/i, "").trim() || id;
+      const n = Number(st.state);
+      const value = Number.isFinite(n) ? String(Math.round(n)) : String(st.state).toLowerCase();
+      if (Number.isFinite(n) && n < 0.5) continue;
+      out.push(`${label} ${value}`);
+    }
+    return out;
+  }
+
+  _update() {
+    if (!this._built || !this._config || !this._dim) return;
+    const now = new Date();
+    const d = this._dim;
+    const lang = this._lang();
+
+    // Cards and date
+    let hours = now.getHours(), mer = "";
+    if (this._uses12h()) { mer = hours < 12 ? "AM" : "PM"; hours = hours % 12 || 12; }
+    this._cardEls[0].querySelector(".digits").textContent = pad2(hours);
+    this._cardEls[0].querySelector(".mer").textContent = mer;
+    this._cardEls[1].querySelector(".digits").textContent = pad2(now.getMinutes());
+    const wd = now.toLocaleDateString(lang, { weekday: "short" }).toUpperCase();
+    const mo = now.toLocaleDateString(lang, { month: "short" }).replace(/\.$/, "").toUpperCase();
+    const spans = this._date.querySelectorAll("span");
+    spans[0].textContent = wd;
+    spans[1].textContent = `${mo} ${pad2(now.getDate())}`;
+
+    // Weather
+    const wx = this._weather();
+    const pollen = d.mode === "large" ? this._pollen() : [];
+    const key = JSON.stringify([wx, pollen, d.mode, d.w, d.h, now.toDateString()]);
+    if (key !== this._key) {
+      this._key = key;
+      this._icon.innerHTML = wx.cond ? weatherIcon(wx.cond, wx.night) : "";
+      this._cap.innerHTML = this._caption(wx, pollen, lang);
+    }
+    this._shift(now.getTime());
+  }
+
+  _temp(n) { return Number.isFinite(n) ? `${Math.round(n)}\u00b0` : "\u2013"; }
+
+  _tempBlock(wx, scale) {
+    const hl = wx.high != null && wx.low != null
+      ? `<div class="hl" style="font-size:${scale * 0.42}px"><span>H: ${this._temp(wx.high)}</span><span>L: ${this._temp(wx.low)}</span></div>` : "";
+    return `<div class="temp" style="gap:${scale * 0.1}px"><span style="font-size:${scale}px">${this._temp(wx.temp)}</span>${hl}</div>`;
+  }
+
+  _caption(wx, pollen, lang) {
+    const { w, h, mode, ch, visible } = this._dim;
+    if (wx.none) return "";
+    if (wx.error) {
+      const sz = h * (mode === "medium" ? 0.09 : mode === "small" ? 0.075 : 0.05);
+      return `<div style="padding-top:${h * 0.05}px"><div style="font-size:${sz}px;font-weight:600">Weather unavailable</div>
+        <div class="note" style="font-size:${sz * 0.85}px">${esc(wx.error)}</div></div>`;
+    }
+    if (mode === "small") {
+      return `<div style="display:flex;justify-content:center;padding-top:${h * 0.21 * 0.72}px">${this._tempBlock(wx, h * 0.145)}</div>`;
+    }
+    if (mode === "medium") {
+      return `<div class="row" style="align-items:center;padding-top:${h * 0.035}px">
+        <div style="min-width:0;display:flex;flex-direction:column;gap:${h * 0.01}px">
+          <div class="city" style="font-size:${h * 0.078}px">${esc(wx.city)}</div>
+          <div class="sum" style="font-size:${h * 0.07}px">${esc(wx.summary)}</div>
+        </div>${this._tempBlock(wx, h * 0.125)}</div>`;
+    }
+    // large
+    const windSz = h * 0.036;
+    const wind = wx.wind != null
+      ? `<div class="wind" style="font-size:${windSz}px;gap:${windSz * 0.25}px">
+          ${wx.bearing != null ? `<svg viewBox="0 0 24 24" width="${windSz * 0.9}" height="${windSz * 0.9}" style="transform:rotate(${wx.bearing + 180}deg)"><path d="M12 3v18M5 10l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ""}
+          <span>${(Math.round(wx.wind * 10) / 10)} ${esc(wx.windUnit)}</span></div>` : "";
+    const ps = h * 0.034;
+    const pollenRow = pollen.length || this._config.pollen.length
+      ? `<div class="pollen" style="font-size:${ps}px;padding-bottom:${h * 0.018}px">${ALLERGEN}${
+        pollen.length ? pollen.slice(0, 3).map((p) => `<span>${esc(p)}</span>`).join("") : "<span>No pollen</span>"}</div>` : "";
+    const days = wx.daily.slice(0, this._dim.days);
+    const fl = h * 0.038, fi = h * 0.065;
+    const forecast = days.length
+      ? `<div class="days">${days.map((x) => `<div class="day" style="gap:${fi * 0.16}px">
+          <span style="font-size:${fl}px">${esc(x.date.toLocaleDateString(lang, { weekday: "short" }))}</span>
+          <span class="ico" style="width:${fi}px;height:${fi}px">${weatherIcon(x.cond, false)}</span>
+          <span style="font-size:${fl}px">${this._temp(x.low)}/${this._temp(x.high)}</span></div>`).join("")}</div>` : "";
+    return `<div style="display:flex;flex-direction:column;height:100%">
+      <div class="row" style="padding-top:${h * 0.025}px">
+        <div style="min-width:0;display:flex;flex-direction:column;gap:${h * 0.008}px">
+          <div class="city" style="font-size:${h * 0.042}px">${esc(wx.city)}</div>
+          <div class="sum" style="font-size:${h * 0.038}px">${esc(wx.summary)}</div>${wind}
+        </div>${this._tempBlock(wx, h * 0.07)}</div>
+      <div style="flex:1"></div>${pollenRow}${forecast}<div style="flex:1"></div></div>`;
+  }
+
+  /** A few pixels' drift every three minutes, against burn-in on AMOLED panels. */
+  _shift(now) {
+    const on = this._config.burn_in_shift !== false;
+    const [x, y] = on ? burnInStep(now) : [0, 0];
+    const key = `${x},${y},${this._dim.w}`;
+    if (key === this._shiftStep) return;
+    this._shiftStep = key;
+    const px = Math.max(1, Math.round(Math.min(this._dim.w, this._dim.h) * 0.008));
+    this._shiftEl.style.transform = x || y ? `translate(${x * px}px, ${y * px}px)` : "";
+  }
+}
+
+class FlipClockCardEditor extends HTMLElement {
+  setConfig(config) {
+    this._config = { ...FLIP_DEFAULTS, ...config };
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (this._form) this._form.hass = hass;
+  }
+
+  _render() {
+    if (!this._form) {
+      this._form = document.createElement("ha-form");
+      this._form.computeLabel = (s) => s.label || s.name;
+      this._form.addEventListener("value-changed", (ev) => {
+        this._config = { ...this._config, ...ev.detail.value };
+        this.dispatchEvent(new CustomEvent("config-changed", {
+          detail: { config: this._config }, bubbles: true, composed: true,
+        }));
+      });
+      this.appendChild(this._form);
+    }
+    const opts = (list) => ({ select: { mode: "dropdown", options: list.map(([value, label]) => ({ value, label })) } });
+    this._form.hass = this._hass;
+    this._form.schema = [
+      { name: "entity", label: "Weather entity", selector: { entity: { domain: "weather" } } },
+      { name: "name", label: "Place name (empty = the entity's name)", selector: { text: {} } },
+      { name: "theme", label: "Theme", selector: opts([["classic", "Classic"], ["charcoal", "Charcoal"], ["amber", "Amber"], ["slate", "Slate"]]) },
+      { name: "typeface", label: "Digits", selector: opts([["condensed", "Condensed"], ["rounded", "Rounded"], ["serif", "Serif"], ["monospaced", "Monospaced"]]) },
+      { name: "time_format", label: "Hours", selector: opts([["auto", "As in Home Assistant"], ["24", "24-hour"], ["12", "12-hour"]]) },
+      { name: "forecast_days", label: "Forecast days (0 = none)", selector: { number: { min: 0, max: 7, mode: "box" } } },
+      { name: "pollen", label: "Pollen sensors", selector: { entity: { domain: "sensor", multiple: true } } },
+      { name: "burn_in_shift", label: "Shift the picture a few pixels now and then (AMOLED burn-in)", selector: { boolean: {} } },
+      { name: "height", label: "Height (CSS length, e.g. 90vh; empty = fill)", selector: { text: {} } },
+    ];
+    this._form.data = this._config;
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* Registration                                                        */
 /* ------------------------------------------------------------------ */
 
@@ -594,12 +1120,22 @@ if (!customElements.get("studio-clock-card")) {
   customElements.define("studio-clock-card", StudioClockCard);
   customElements.define("studio-clock-card-editor", StudioClockCardEditor);
 }
+if (!customElements.get("flip-clock-card")) {
+  customElements.define("flip-clock-card", FlipClockCard);
+  customElements.define("flip-clock-card-editor", FlipClockCardEditor);
+}
 
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "studio-clock-card",
   name: "Studio Clock",
   description: "A broadcast studio clock: a ring of dots, the time, and a countdown to your next calendar event.",
+  preview: false,
+});
+window.customCards.push({
+  type: "flip-clock-card",
+  name: "Flip Clock",
+  description: "Flip-clock cards with the date, and the weather from a Home Assistant weather entity.",
   preview: false,
 });
 

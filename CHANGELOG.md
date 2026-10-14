@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.0
+
+- Flip clock card: flip cards, date, weather from a `weather.*` entity with daily forecast,
+  wind, pollen sensors, four themes, four digit faces, adaptive layout, visual editor.
+
 ## 0.2.0
 
 - Studio clock: optional `timer.*` entity, which takes over while it runs and counts up for a
