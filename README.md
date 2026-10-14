@@ -12,7 +12,9 @@ the weather.
   <img src="docs/flip-clock.png" alt="Flip Clock" width="360">
 </p>
 
-Made for the idle page of a wall panel, and good on any dashboard: browser, the HA app, Fully Kiosk.
+Made for the idle page of [Wall Panel for HA](https://3210.lu/hapanel/), and good on any dashboard:
+browser, the HA app, Fully Kiosk. The studio clock is the same one as in
+[Studio Clock](https://3210.lu/studioclock/) for Android, iOS and the web.
 
 ## Studio Clock (`custom:studio-clock-card`)
 
