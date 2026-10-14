@@ -114,7 +114,7 @@ const SVG = "http://www.w3.org/2000/svg";
 const REFRESH_MS = 5 * 60 * 1000;
 
 const STUDIO_CSS = `
-:host { display: block; }
+:host { display: block; height: 100%; }
 ha-card { background: #000; color: #fff; overflow: hidden; height: 100%; }
 .wrap { container-type: size; width: 100%; height: 100%; min-height: 240px; display: flex;
   align-items: center; justify-content: center; font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace; }
@@ -139,6 +139,7 @@ ha-card { background: #000; color: #fff; overflow: hidden; height: 100%; }
 .badge.filled { color: #000; }
 .badge.none { visibility: hidden; }
 .count { font-size: 15cqw; line-height: 1; white-space: nowrap; }
+.count.start { font-size: 11cqw; }
 .digit { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
   font-size: 42cqw; line-height: 1; }
 .digit.two { font-size: 32cqw; }
@@ -402,7 +403,9 @@ class StudioClockCard extends HTMLElement {
     this._badge.style.borderColor = accent;
     this._badge.style.background = phase.kind === "countdown" || label == null ? "transparent" : accent;
     this._count.style.color = phase.kind === "idle" ? "rgba(255,255,255,.55)" : accent;
-    this._count.textContent = this._countdown(phase, now);
+    const text = this._countdown(phase, now);
+    this._count.textContent = text;
+    this._count.classList.toggle("start", text.length > 8);
 
     this._renderDetails(state, now);
   }
