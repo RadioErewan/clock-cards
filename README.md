@@ -14,7 +14,7 @@ the weather.
 
 Made for the idle page of [Wall Panel for HA](https://3210.lu/hapanel/), and good on any dashboard:
 browser, the HA app, Fully Kiosk. The studio clock is the same one as in
-[Studio Clock](https://3210.lu/studioclock/) for Android and iOS.
+[Studio Clock](https://3210.lu/studioclock/) for Android, macOS and iOS.
 
 ## Studio Clock (`custom:studio-clock-card`)
 
